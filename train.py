@@ -1,5 +1,6 @@
 import os
 import torch as t
+import numpy as np
 from tqdm import tqdm, trange
 from model_zoo import BaseMode
 from SpectrumDataset import train_dataset, X_test, y_test
@@ -22,11 +23,20 @@ optimizer = t.optim.Adam(model.parameters(),
                          weight_decay=0.0002)
 
 for epoch in (range(EPOCH)):
+    acc = []
+    with t.no_grad():
+        val_pred = t.argmax(model(t.from_numpy(X_test).cuda()), dim=1)
+        val_pred = val_pred.cpu().numpy()
+        acc.append(float(sum(y_test == val_pred)) / y_test.shape[0])
+        print("测试准确率：", acc[-1])
+        np.save('./acc.npy', np.array(acc))
+
     bar = trange(EPOCH_STEPS)
     for step in bar:
         for data in train_loader:
             train_data = t.cat(data[0], 0).cuda()
             train_labels = t.cat(data[1]).cuda().long()
+            train_data = train_data.reshape([-1, 1, 2000, 1])
 
             model.mode = 'train'
             preds = model(train_data)
@@ -46,10 +56,7 @@ for epoch in (range(EPOCH)):
         'iter': 0,
         'epoch': epoch
     }, './checkpoint/%03d_optimizer.pth' % epoch)
-    with t.no_grad():
-        val_pred = t.argmax(model(t.from_numpy(X_test).cuda()))
-        val_pred = val_pred.cpu().numpy()
-        print("测试准确率：", float(sum(y_test==val_pred)) / y_test.shape[0])
+
 
 
 

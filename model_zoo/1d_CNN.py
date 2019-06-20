@@ -2,39 +2,15 @@ import torch as t
 import torch.nn as nn
 
 
-def group1d(in_channels, out_channels, groups):
-    return \
-        nn.Sequential(
-            nn.Conv2d(
-                in_channels,
-                out_channels,
-                kernel_size=1,
-                groups=groups,
-                bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-
-
 class BaseMode(nn.Module):
     def __init__(self,
                  in_channels,
-                 n_class,
-                 groups=(16, 64, 32),
-                 out_feats=(1024, 512, 256)):
+                 n_class):
 
         super(BaseMode, self).__init__()
-        self.groups = groups
-        self.out_feats = out_feats
-        assert len(groups) == len(out_feats), "groups's len must equal to out_feats's len"
+        self._make_stem_layer(in_channels)
 
-        self.g_blocks = nn.ModuleDict({'gconv1': group1d(in_channels, out_feats[0], groups[0])})
-        for i in range(len(groups)):
-            if i == 0:
-                continue
-            self.g_blocks.update({
-                'gconv{}'.format(i+1): group1d(out_feats[i-1], out_feats[i], groups[i]),  # cin:16/g, ker:8/g
-            })
+        """配置block"""
 
         self.classifilier = nn.ModuleDict()
         self.classifilier.update({
@@ -43,10 +19,16 @@ class BaseMode(nn.Module):
             'fc2': nn.Conv2d(256, n_class, 1)
         })
 
+    def _make_stem_layer(self, in_channels):
+        self.blocks0 = nn.ModuleList()
+        self.blocks0.append(nn.Conv2d(in_channels, 64, kernel_size=(7, 1), bias=False))
+        self.blocks0.append(nn.BatchNorm2d(num_features=64))
+        self.blocks0.append(nn.ReLU(inplace=True))
+
     def forward(self, input):
         x = input
-        for i, b in enumerate(self.g_blocks):
-            x = self.g_blocks[b](x)
+        for i, b in enumerate(self.blocks):
+            x = self.blocks[b](x)
             # x = x.reshape(-1, self.groups[i], self.out_feats[i]//self.groups[i], 1, 1)
             # x = x.reshape(-1, self.out_feats[i] // self.groups[i], self.groups[i], 1, 1)
             # x = x.reshape(-1, self.out_feats[i], 1, 1)
